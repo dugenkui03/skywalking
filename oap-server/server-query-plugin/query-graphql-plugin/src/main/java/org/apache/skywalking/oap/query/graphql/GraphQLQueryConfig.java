@@ -28,6 +28,8 @@ import org.apache.skywalking.oap.server.library.module.ModuleConfig;
 @Getter
 @Setter
 public class GraphQLQueryConfig extends ModuleConfig {
+    // 路径
     private String path;
+    // 是否允许 log test tool
     private boolean enableLogTestTool;
 }

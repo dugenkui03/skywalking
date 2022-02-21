@@ -55,6 +55,7 @@ public class GraphQLQueryHandler extends JettyJsonHandler {
     private final Type mapOfStringObjectType = new TypeToken<Map<String, Object>>() {
     }.getType();
 
+    // 这两个 final 字段对应的 构造函数在 RequiredArgsConstructor 中
     private final String path;
 
     private final GraphQL graphQL;
@@ -66,44 +67,61 @@ public class GraphQLQueryHandler extends JettyJsonHandler {
 
     @Override
     protected JsonElement doPost(HttpServletRequest req) throws IOException {
+        // 主要逻辑在这里：调用 GraphQL 引擎执行请求
         BufferedReader reader = new BufferedReader(new InputStreamReader(req.getInputStream()));
         String line;
-        StringBuilder request = new StringBuilder();
+        StringBuilder sb = new StringBuilder();
         while ((line = reader.readLine()) != null) {
-            request.append(line);
+            sb.append(line);
         }
 
-        JsonObject requestJson = gson.fromJson(request.toString(), JsonObject.class);
+        // 将 json 字符串转换成 JsonObject 对象
+        JsonObject requestJson = gson.fromJson(sb.toString(), JsonObject.class);
 
-        return execute(requestJson.get(QUERY)
-                                  .getAsString(), gson.fromJson(requestJson.get(VARIABLES), mapOfStringObjectType));
+        /**
+         * note 从请求中解析 query 参数
+         *
+         * todo 支持解析出 ExecutionInput 中的其他数据，例如上下文信息、dataLoader和operationName等
+         */
+        String query = requestJson.get(QUERY).getAsString();
+        JsonElement variables = requestJson.get(VARIABLES);
+        Map<String, Object> variablesMap = gson.fromJson(variables, mapOfStringObjectType);
+        return execute(query,variablesMap );
     }
 
-    private JsonObject execute(String request, Map<String, Object> variables) {
+    private JsonObject execute(String query, Map<String, Object> variables) {
         try {
-            final ExecutionInput.Builder queryBuilder = ExecutionInput.newExecutionInput().query(request);
+            final ExecutionInput.Builder queryBuilder = ExecutionInput.newExecutionInput().query(query);
             if (CollectionUtils.isNotEmpty(variables)) {
                 queryBuilder.variables(variables);
             }
             final ExecutionInput executionInput = queryBuilder.build();
+            // note 执行请求
             ExecutionResult executionResult = graphQL.execute(executionInput);
             LOGGER.debug("Execution result is {}", executionResult);
+
+            // note
             Object data = executionResult.getData();
             List<GraphQLError> errors = executionResult.getErrors();
             JsonObject jsonObject = new JsonObject();
             if (data != null) {
+                // 将 data 转换为 JsonObject 对象
                 jsonObject.add(DATA, gson.fromJson(gson.toJson(data), JsonObject.class));
             }
 
+            // 如果错误不为空，则返回所有错误
             if (CollectionUtils.isNotEmpty(errors)) {
+                // 错误数组
                 JsonArray errorArray = new JsonArray();
                 errors.forEach(error -> {
                     JsonObject errorJson = new JsonObject();
+                    // todo 没有更详细的信息了，例如位置和类型
                     errorJson.addProperty(MESSAGE, error.getMessage());
                     errorArray.add(errorJson);
                 });
                 jsonObject.add(ERRORS, errorArray);
             }
+            // todo 没有 executionResult.getExtensions()
             return jsonObject;
         } catch (final Throwable e) {
             LOGGER.error(e.getMessage(), e);

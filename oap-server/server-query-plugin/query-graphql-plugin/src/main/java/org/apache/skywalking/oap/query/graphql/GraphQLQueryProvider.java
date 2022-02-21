@@ -59,11 +59,13 @@ public class GraphQLQueryProvider extends ModuleProvider {
 
     private GraphQL graphQL;
 
+    // the name of this provider
     @Override
     public String name() {
         return "graphql";
     }
 
+    // the moduleDefine name
     @Override
     public Class<? extends ModuleDefine> module() {
         return QueryModule.class;
@@ -76,6 +78,8 @@ public class GraphQLQueryProvider extends ModuleProvider {
 
     @Override
     public void prepare() throws ServiceNotProvidedException, ModuleStartException {
+        // note 构建 schema 并绑定 dataFetcher
+        // todo 是否需要使用 dataLoader 或者 指令
         GraphQLSchema schema = SchemaParser.newParser()
                                            .file("query-protocol/common.graphqls")
                                            .resolvers(new Query(), new Mutation(), new HealthQuery(getManager()))
